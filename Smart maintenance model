@@ -1,15 +1,14 @@
 # -*- coding: utf-8 -*-
 """
-    作者:       Chen Shulu
-    版本:       4.0
-    日期:       2019/07/29
-    项目名称：   Aftersale
-    python环境： 3.7
+    Author:       Chen Shulu
+    Version:       4.0
+    date:       2019/07/29
+    project name：   Aftersale
+    python version： 3.7
 """
 #import cursor as cursor
 import pandas as pd
 import itertools
-
 from mpmath import plot
 from statsmodels.tsa.arima_model import ARIMA
 import warnings
@@ -25,6 +24,7 @@ from LogUtils import *
 warnings.filterwarnings("ignore")
 setup_logging(default_path = "logging.yaml")
 
+### Count customer numbers## 
 def get_obdid(config_id):
     db_lc=config_id['db']
     user_name=config_id['user']
@@ -39,7 +39,7 @@ def get_obdid(config_id):
     logging.info("smart-service|get_obdid|"+ str(len(data))+"位用户参与此次保养计算")
     return data
 
-###从数据库读车主行驶数据###
+###get customer data from the database###
 def get_customerdata(db_lc,user_name,pw,host_lc,port_lc,obd_id):
     try:
         conn = psycopg2.connect(database=db_lc, user=user_name,
@@ -56,7 +56,7 @@ def get_customerdata(db_lc,user_name,pw,host_lc,port_lc,obd_id):
         print(err)
 
 
-##从数据库读零件数据###
+###get part status data from database###
 def get_partdata(db_lc,user_name,pw,host_lc,port_lc):
     try:
         conn = psycopg2.connect(database=db_lc, user=user_name,
@@ -73,7 +73,8 @@ def get_partdata(db_lc,user_name,pw,host_lc,port_lc):
         return data
     except Exception as err:
         logging.error("smart-service|get_partdata|1|用户数据获取错误此ID无法计算!!!" )
-##从数据库读天气数据###
+        
+###get weather data from database###
 def get_weascoredata(config_gws):
     try:
         db_lc=config_gws['db']
@@ -96,13 +97,14 @@ def get_weascoredata(config_gws):
     except Exception as err:
         logging.error("smart-service|get_customerdata|1|天气数据获取错误此ID无法计算!!!")
 
-###将结果写入数据库###
+###write reasult to database###
 def write_data_to_sql(db_w,user_w,pswd_w,host_w,port_w,data):
     connect = create_engine(
         'postgresql+psycopg2://' + user_w + ':' + pswd_w + '@' + host_w + ':' + str(port_w) + '/' + db_w)
     pd.io.sql.to_sql(data, 'car_service_result', connect, schema='public', if_exists='append')
     connect.dispose()
-####计算各部件等效里程（天气&拥堵）###
+    
+####count the equivalent mileage(considering weather and traffic jam)###
 def count_equivalent(data_path,config_path):
     warnings.filterwarnings("ignore")
     traffic_table = pd.read_csv(config_path['get_traffic'])
@@ -168,30 +170,32 @@ def count_equivalent(data_path,config_path):
     mile_equivalent.loc['Col_sum'] = mile_equivalent.apply(lambda x: x.sum())
     mile_sum = mile_equivalent.ix[-1,]
     return mile_sum
-###判断函数###
+    
+###judgement function###
 def exam (part,part_mile,start_mile):
   for i in range(len(part_mile)):
     if (part_mile.mile[len(part_mile)-1] < start_mile):
-      print("您无需保养",part)
+      print("you do not need to maintain",part)
       day = 90
       break
     elif (part_mile.mile[0] >= start_mile):
-      print("您急需保养", part)
+      print("you need to mantain immediately", part)
       day = 0
       break
     elif (part_mile.mile[i] >= start_mile):
       if (i >= 0 and i <= 30):
-        print("您需要在", i+1, "天内对", part, "进行保养")
+        print("you need to mantain your cars in ", i+1, "days for ", part, "part")
         day = i+1
         break
       elif (i > 30):
-        print("您无需保养",part)
+        print("you do not need to maintain",part)
         day = i
         break
     else :
      pass
   return day
-###接入车主行驶里程时的剩余保养里程###
+  
+###count the left miles to maintain when they activating the service###
 def count_leftmile(car_type,total_mile,last_maintain,config_lf):
   last_miles = []
   psa_mile = config_lf['psa_miles']
@@ -199,9 +203,9 @@ def count_leftmile(car_type,total_mile,last_maintain,config_lf):
   if (car_type == 'PSA'):#psa
     fixmile = psa_mile
     for i in range(10):
-      if (last_maintain[i] > 0):   #上次保养时的总里程（有数）
+      if (last_maintain[i] > 0):   
         last_miles.append(fixmile[i]-total_mile + last_maintain[i])
-      else:                        #上次保养时的总里程（没数）
+      else:                       
         last_miles.append(fixmile[i]-total_mile%fixmile[i])
   elif (car_type == 'KIA'):
     fixmile = kia_mile
@@ -211,7 +215,8 @@ def count_leftmile(car_type,total_mile,last_maintain,config_lf):
       else:
         last_miles.append(fixmile[i] - total_mile % fixmile[i])
   return last_miles
-###计算百分比###
+  
+###count the percent###
 def count_percent(car_type,last_mile,equal_miles,part_status,total_miles,config_cp):
     psa_mile = config_cp['psa_miles']
     kia_mile = config_cp['kia_miles']
@@ -239,7 +244,8 @@ def count_percent(car_type,last_mile,equal_miles,part_status,total_miles,config_
     perc = perc.T
     perc.columns=['刹车片','轮胎','空气滤清器','空调滤清器','雨刮器','火花塞','电池系统','防冻液','机油','机油滤清器']
     return perc
-###主函数###
+    
+###main function###
 def smart_aftersale(mileage,partstatus,config_yaml):
       warnings.filterwarnings("ignore")
       part_name = ['mtoservise_oil','mtoservise_oil_filter','mtoservise_break_pad','mtoservise_tire',
@@ -358,7 +364,7 @@ def smart_aftersale(mileage,partstatus,config_yaml):
         results = mod.fit()
 
 
-        #预测
+        #forecats
         pred = results.predict(start=start_pre, end=end_pre, dynamic= True)
         for i in range(len(pred)):
           if pred[i] < 0:
