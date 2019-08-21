@@ -1,0 +1,96 @@
+setwd("C:/Users/Lenovo/Desktop/2画像")
+weather<-read.csv("weathe_source.csv")
+library("plyr")
+library("dplyr")
+##计算天气得分
+fog<-read.csv("weather_fog.csv")
+rain<-read.csv("weather_rain.csv")
+snow<-read.csv("weather_snow.csv")
+wind<-read.csv("weather_wind.csv")
+temp<-read.csv("weather_temp.csv")
+haze<-read.csv("weather_haze.csv")
+lowtemp<-weather$low_num
+hightemp<-weather$high_num
+
+weather1<-weather
+weather1<-weather1[,-1]
+x2<-matrix(nrow=nrow(weather1),ncol=11)
+weather1<-cbind(weather1,x2)
+for (i in 1:nrow(weather)){
+  id<-which(weather$status1[i]==rain$weather_type)
+  if(length(id)!=0){
+    weather1[i,11]<-rain$score[id]
+    }
+  id2<-which(weather$status2[i]==rain$weather_type)
+  if(length(id2)!=0){
+    weather1[i,12]<-rain$score[id2]
+    }
+  id3<-which(weather$status1[i]==snow$weather_type)
+  if(length(id3)!=0){
+    weather1[i,13]<-snow$score[id3]
+    }
+  id4<-which(weather$status2[i]==snow$weather_type)
+  if(length(id4)!=0){
+    weather1[i,14]<-snow$score[id4]
+    }
+  id5<-which(weather$quality_grade[i]==haze$weather_type)
+  if(length(id5)!=0){
+    weather1[i,15]<-haze$score[id5]
+    }
+  id6<-which(weather$wind_level[i]==wind$weather_type)
+  if(length(id6)!=0){
+    weather1[i,16]<-wind$score[id6]
+  }
+  id8<-which(weather$high_num[i]==temp$temperature)
+  if(length(id8)!=0){
+    weather1[i,17]<-temp$batteryscore[id8]
+    weather1[i,19]<-temp$breakscore[id8]
+    weather1[i,21]<-temp$ignscore[id8]
+  }
+  id9<-which(weather$low_num[i]==temp$temperature)
+  if(length(id9)!=0){
+    weather1[i,18]<-temp$batteryscore[id9]
+    weather1[i,20]<-temp$breakscore[id9]
+    weather1[i,22]<-temp$ignscore[id9]
+  }
+}
+weather1[is.na(weather1)]<-10
+colnames(weather1)<-c("city","date","wind_level","status1","status2",
+                      "hightemp","lowtemp","quality","aqi","pm10","rainscore1","rainscore2",
+                      "snowscore1","snowscore2","hazescore",
+                      "windscore","Hbatteryscore","Lbatteryscore",
+                      "Hbreakscore","Lbreakscore","Hignscore","Lignscore")
+head(weather1)
+write.csv(weather1,"天气评分2018new2.csv",row.names=F,fileEncoding="GBK")
+
+##综合计算各部件得分
+weather2<-cbind(as.character(weather1$city),weather1$date)
+mx<-matrix(ncol=9,nrow=nrow(weather2))
+weather2<-cbind(weather2,mx)
+for (i in 1:nrow(weather2)){
+  weather2[i,3]<-(0.3*weather1$rainscore1[i]+0.3*weather1$rainscore2[i]+0.2*weather1$Hbreakscore[i]+
+                    0.2*weather1$Lbreakscore[i]+0.3*weather1$snowscore1[i]+0.3*weather1$snowscore2[i]+
+                    0.2*weather1$hazescore[i]+0.2*weather1$hazescore[i])/2
+  weather2[i,4]<-(0.2*weather1$rainscore1[i]+0.2*weather1$rainscore2[i]+0.4*weather1$Hbreakscore[i]+
+                    0.4*weather1$Lbreakscore[i]+0.4*weather1$snowscore1[i]+0.4*weather1$snowscore2[i])/2
+  weather2[i,5]<-(0.7*weather1$hazescore[i]+0.7*weather1$hazescore[i]+0.2*weather1$rainscore1[i]+
+                    0.2*weather1$rainscore2[i])/2+0.1*weather1$windscore[i]
+  weather2[i,6]<-(0.7*weather1$hazescore[i]+0.7*weather1$hazescore[i]+0.2*weather1$rainscore1[i]+
+                    0.2*weather1$rainscore2[i])/2+0.1*weather1$windscore[i]
+  weather2[i,7]<-(0.3*weather1$rainscore1[i]+0.3*weather1$rainscore2[i]+0.2*weather1$Hignscore[i]+
+                    0.2*weather1$Lignscore[i]+0.5*weather1$snowscore1[i]+0.5*weather1$snowscore2[i])/2
+  weather2[i,8]<-(0.1*weather1$rainscore1[i]+0.1*weather1$rainscore2[i]+0.7*weather1$Hignscore[i]+
+                    0.7*weather1$Lignscore[i]+0.2*weather1$hazescore[i]+0.2*weather1$hazescore[i])/2
+  weather2[i,9]<-(0.2*weather1$rainscore1[i]+0.2*weather1$rainscore2[i]+0.8*weather1$Hbatteryscore[i]+
+                    0.8*weather1$Lbatteryscore[i])/2
+  weather2[i,10]<-(0.2*weather1$rainscore1[i]+0.2*weather1$rainscore2[i]+0.8*weather1$Hbatteryscore[i]+
+                    0.8*weather1$Lbatteryscore[i])/2
+  weather2[i,11]<-(weather1$Hignscore[i]+weather1$Lignscore[i])/2
+}
+
+weather2<-cbind(weather2,as.character(weather1$status1),as.character(weather1$status2),as.character(weather1$hightemp),
+                as.character(weather1$lowtemp),as.character(weather1$wind_level),as.character(weather1$quality))
+colnames(weather2)<-c("city","date","breakpad","tire","airfilter",
+                      "airconfilter","wiper","ignition","storagebattery",
+                      "battery","antifrezze","status1","status2","hightemp","lowtemp","windlevel","quality")
+write.csv(weather2,"各城市天气得分_最新.csv",row.names=F,fileEncoding="GBK")
